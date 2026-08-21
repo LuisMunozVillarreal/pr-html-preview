@@ -1,0 +1,58 @@
+image:
+  repository: ghcr.io/owner/pr-html-preview
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+github:
+  appId: ""
+  existingSecret: github-app-credentials
+  privateKeyKey: private-key
+  webhookSecretKey: webhook-secret
+
+preview:
+  baseUrl: https://preview.example.com
+  username: preview
+  existingAuthSecret: ""
+  defaultSourceDir: docs/html
+  sourceDirOverrides: {}
+  webhookBodyMaxBytes: 1048576
+  maxFileCount: 2000
+  maxFileSizeBytes: 2097152
+  maxTotalBytes: 157286400
+  maxStorageBytes: 786432000
+  maxPreviewCount: 100
+  minFreeBytes: 104857600
+
+persistence:
+  size: 1Gi
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  retain: true
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: preview.example.com
+  path: /
+  tls:
+    enabled: true
+    secretName: pr-html-preview-tls
+
+resources:
+  requests:
+    cpu: 25m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

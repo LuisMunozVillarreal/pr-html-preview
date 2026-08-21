@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "github": {
+      "type": "object",
+      "required": ["appId", "existingSecret"],
+      "properties": {
+        "appId": {"type": "string"},
+        "existingSecret": {"type": "string", "minLength": 1},
+        "privateKeyKey": {"type": "string", "minLength": 1},
+        "webhookSecretKey": {"type": "string", "minLength": 1}
+      }
+    },
+    "preview": {
+      "type": "object",
+      "properties": {
+        "baseUrl": {"type": "string", "pattern": "^https://[^/]+$"},
+        "username": {"type": "string", "minLength": 1},
+        "existingAuthSecret": {"type": "string"},
+        "defaultSourceDir": {"type": "string", "minLength": 1},
+        "sourceDirOverrides": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
+
+        "webhookBodyMaxBytes": {"type": "integer", "minimum": 1},
+        "maxFileCount": {"type": "integer", "minimum": 1},
+        "maxFileSizeBytes": {"type": "integer", "minimum": 1},
+        "maxTotalBytes": {"type": "integer", "minimum": 1},
+        "maxStorageBytes": {"type": "integer", "minimum": 1},
+        "maxPreviewCount": {"type": "integer", "minimum": 1},
+        "minFreeBytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "persistence": {
+      "type": "object",
+      "properties": {
+        "size": {"type": "string", "minLength": 1},
+        "accessMode": {"enum": ["ReadWriteOnce", "ReadWriteMany"]},
+        "retain": {"type": "boolean"}
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "host": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}
