@@ -129,6 +129,7 @@ Create a local file outside this repository, for example `installation-values.ya
 image:
   repository: registry.example/pr-html-preview
   tag: 0.1.0
+  digest: ""
 
 github:
   appId: "REPLACE_WITH_GITHUB_APP_ID"
@@ -218,6 +219,35 @@ docs/html/index.html
 All files below `docs/html/` are copied. Relative CSS, JavaScript, image, and document links continue to work. If a repository uses another directory, add a central `sourceDirOverrides` entry and upgrade the Helm release.
 
 No workflow file is required in that repository.
+
+## Release and deployment CI draft
+
+`.github/workflows/release.yml` contains a safe-by-default draft for publishing and deploying the central service. It runs only after a push to `main`, and every release job is skipped until the repository variable `DEPLOYMENT_ENABLED` is exactly `true`.
+
+When enabled, the workflow:
+
+1. validates the required variables and secrets;
+2. builds and publishes a traceable `sha-<full-commit>` container tag;
+3. sends the immutable `repository@sha256:...` image reference and source SHA to a private GitOps repository using `repository_dispatch`;
+4. optionally waits for the deployment health endpoint to return exactly HTTP 200.
+
+The workflow deliberately has no kubeconfig, `kubectl`, personal domain, registry name, or installation-specific Helm values. The private GitOps repository is responsible for setting `image.repository` and `image.digest` in the deployment values and allowing Flux to reconcile them. A digest takes precedence over `image.tag` in the chart.
+
+Configuration that remains to be added later:
+
+| Type | Name | Purpose |
+|---|---|---|
+| Variable | `DEPLOYMENT_ENABLED` | Master gate; leave unset or `false` until the complete path is configured. |
+| Variable | `CONTAINER_REGISTRY` | Registry hostname only. |
+| Variable | `IMAGE_REPOSITORY` | Repository path inside the registry. |
+| Variable | `GITOPS_REPOSITORY` | Private deployment repository in `owner/repository` form. |
+| Variable | `SMOKE_TEST_ENABLED` | Enables the optional health probe when exactly `true`. |
+| Variable | `DEPLOYMENT_HEALTH_URL` | Full private deployment health URL, stored outside source control. |
+| Secret | `REGISTRY_USERNAME` | Registry publishing identity. |
+| Secret | `REGISTRY_PASSWORD` | Registry publishing credential. |
+| Secret | `GITOPS_TOKEN` | Fine-grained credential allowed to dispatch only to the private GitOps repository. |
+
+Create a protected GitHub Environment named `production` before enabling the workflow, restrict its deployment branch to `main`, and store all three deployment secrets as environment secrets rather than repository secrets. Add required reviewers there if image publication and deployment should require approval. Both secret-consuming jobs use this environment. The dispatch and optional smoke test run in the same environment job, so a failed health check fails that deployment job. The private GitOps repository still needs a receiver for the `update-pr-html-preview` repository-dispatch event; this will be added when the registry and deployment repository are selected.
 
 ## Operations
 

@@ -86,6 +86,17 @@ def main() -> None:
     volumes = external_deployment["spec"]["template"]["spec"]["volumes"]
     auth_volume = next(volume for volume in volumes if volume["name"] == "preview-auth")
     assert auth_volume["secret"]["secretName"] == "provided-auth"
+
+    digest = "sha256:" + "a" * 64
+    digest_documents = render(
+        "--set-string",
+        "image.repository=registry.example/pr-html-preview",
+        "--set-string",
+        f"image.digest={digest}",
+    )
+    digest_deployment = one(digest_documents, "Deployment")
+    digest_container = digest_deployment["spec"]["template"]["spec"]["containers"][0]
+    assert digest_container["image"] == f"registry.example/pr-html-preview@{digest}"
     print("Helm contract: OK")
 
 

@@ -84,6 +84,30 @@ async def test_queue_worker_completes_delivery(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_queue_worker_handles_idle_timeout_deterministically(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = EventStore(tmp_path / "queue.sqlite3")
+
+    async def handler(payload: dict[str, object], event: str) -> None:
+        raise AssertionError("idle worker must not invoke the handler")
+
+    worker = QueueWorker(store, handler, idle_seconds=0.01)
+
+    async def timeout_once(awaitable: object, **options: float) -> None:
+        assert options["timeout"] == 0.01
+        close = getattr(awaitable, "close", None)
+        assert callable(close)
+        close()
+        worker.stop()
+        raise TimeoutError
+
+    monkeypatch.setattr(asyncio, "wait_for", timeout_once)
+    await worker.run()
+    store.close()
+
+
+@pytest.mark.asyncio
 async def test_queue_worker_retains_delivery_at_maximum_backoff(tmp_path: Path) -> None:
     store = EventStore(tmp_path / "queue.sqlite3")
 
