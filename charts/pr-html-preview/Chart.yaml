@@ -1,0 +1,6 @@
+apiVersion: v2
+name: pr-html-preview
+description: Authenticated HTML pull request previews from a GitHub App
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

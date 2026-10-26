@@ -1,0 +1,124 @@
+name: Release and deployment draft
+
+"on":
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-html-preview-production
+  cancel-in-progress: false
+
+jobs:
+  configuration:
+    if: ${{ vars.DEPLOYMENT_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate non-secret deployment configuration
+        env:
+          CONTAINER_REGISTRY: ${{ vars.CONTAINER_REGISTRY }}
+          IMAGE_REPOSITORY: ${{ vars.IMAGE_REPOSITORY }}
+          GITOPS_REPOSITORY: ${{ vars.GITOPS_REPOSITORY }}
+        run: |
+          set -Eeuo pipefail
+          for name in CONTAINER_REGISTRY IMAGE_REPOSITORY GITOPS_REPOSITORY; do
+            if [ -z "${!name}" ]; then
+              printf 'Missing required deployment configuration: %s\n' "$name" >&2
+              exit 1
+            fi
+          done
+
+  publish:
+    needs: configuration
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+      image: ${{ vars.CONTAINER_REGISTRY }}/${{ vars.IMAGE_REPOSITORY }}
+      tag: sha-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Validate registry credentials
+        env:
+          REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+          REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+        run: |
+          set -Eeuo pipefail
+          for name in REGISTRY_USERNAME REGISTRY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              printf 'Missing required deployment secret: %s\n' "$name" >&2
+              exit 1
+            fi
+          done
+      - name: Log in to the container registry
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ vars.CONTAINER_REGISTRY }}
+          username: ${{ secrets.REGISTRY_USERNAME }}
+          password: ${{ secrets.REGISTRY_PASSWORD }}
+      - name: Build and publish traceable image tag
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
+        with:
+          context: .
+          push: true
+          tags: ${{ vars.CONTAINER_REGISTRY }}/${{ vars.IMAGE_REPOSITORY }}:sha-${{ github.sha }}
+
+  deploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Validate GitOps configuration
+        env:
+          GITOPS_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          GITOPS_REPOSITORY: ${{ vars.GITOPS_REPOSITORY }}
+        run: |
+          set -Eeuo pipefail
+          for name in GITOPS_TOKEN GITOPS_REPOSITORY; do
+            if [ -z "${!name}" ]; then
+              printf 'Missing required GitOps configuration: %s\n' "$name" >&2
+              exit 1
+            fi
+          done
+      - name: Request deployment from the private GitOps repository
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_TOKEN }}
+          GITOPS_REPOSITORY: ${{ vars.GITOPS_REPOSITORY }}
+          IMAGE: ${{ needs.publish.outputs.image }}
+          IMAGE_TAG: ${{ needs.publish.outputs.tag }}
+          IMAGE_DIGEST: ${{ needs.publish.outputs.digest }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -Eeuo pipefail
+          jq -n \
+            --arg image "$IMAGE" \
+            --arg tag "$IMAGE_TAG" \
+            --arg digest "$IMAGE_DIGEST" \
+            --arg source_sha "$SOURCE_SHA" \
+            '{event_type:"update-pr-html-preview",client_payload:{image:$image,tag:$tag,digest:$digest,image_ref:($image + "@" + $digest),source_sha:$source_sha}}' \
+            > "$RUNNER_TEMP/deployment-dispatch.json"
+          gh api "repos/$GITOPS_REPOSITORY/dispatches" \
+            --method POST \
+            --input "$RUNNER_TEMP/deployment-dispatch.json"
+      - name: Wait for the deployed health endpoint
+        if: ${{ vars.SMOKE_TEST_ENABLED == 'true' }}
+        env:
+          HEALTH_URL: ${{ vars.DEPLOYMENT_HEALTH_URL }}
+        run: |
+          set -Eeuo pipefail
+          if [ -z "$HEALTH_URL" ]; then
+            printf 'DEPLOYMENT_HEALTH_URL is required when smoke tests are enabled\n' >&2
+            exit 1
+          fi
+          for attempt in $(seq 1 30); do
+            status="$(curl --silent --show-error --max-time 10 --output /dev/null --write-out '%{http_code}' "$HEALTH_URL" || true)"
+            if [ "$status" = "200" ]; then
+              exit 0
+            fi
+            sleep 10
+          done
+          printf 'Deployment did not return HTTP 200 before the smoke-test deadline\n' >&2
+          exit 1

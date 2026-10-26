@@ -1,0 +1,12 @@
+1. GitHub webhook URL:
+   https://{{ .Values.ingress.host }}/api/github/webhook
+
+2. Retrieve the preview credentials from the configured Secret:
+   kubectl -n {{ .Release.Namespace }} get secret {{ include "pr-html-preview.authSecretName" . }} -o jsonpath='{.data.username}' | base64 --decode; echo
+   kubectl -n {{ .Release.Namespace }} get secret {{ include "pr-html-preview.authSecretName" . }} -o jsonpath='{.data.password}' | base64 --decode; echo
+
+3. Health check:
+   kubectl -n {{ .Release.Namespace }} port-forward service/{{ include "pr-html-preview.fullname" . }} 8080:80
+   curl http://127.0.0.1:8080/healthz
+
+The NOTES output does not include credential values. A chart-generated password is necessarily present in rendered Secret manifests and Helm release storage; use preview.existingAuthSecret if your rendering pipeline must never generate a credential.

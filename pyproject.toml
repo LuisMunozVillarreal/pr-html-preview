@@ -1,0 +1,63 @@
+[project]
+name = "pr-html-preview"
+version = "0.1.0"
+description = "A self-hosted GitHub App for authenticated HTML pull request previews"
+readme = "README.md"
+requires-python = ">=3.13"
+license = { text = "GPL-3.0-only" }
+dependencies = [
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "pyjwt[crypto]>=2.10,<3",
+  "pydantic>=2.11,<3",
+  "uvicorn>=0.35,<1",
+]
+
+[project.scripts]
+pr-html-preview = "pr_html_preview.main:main"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.17,<2",
+  "pip-audit>=2.9,<3",
+  "pytest>=9.0.3,<10",
+  "pytest-asyncio>=1.1,<2",
+  "pytest-cov>=6.2,<7",
+  "pyyaml>=6.0,<7",
+  "ruff>=0.12,<1",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pr_html_preview"]
+
+[tool.pytest.ini_options]
+addopts = "-q --strict-markers --cov=pr_html_preview --cov-report=term-missing --cov-fail-under=95"
+asyncio_mode = "auto"
+testpaths = ["tests"]
+filterwarnings = [
+  "ignore:Using `httpx` with `starlette.testclient` is deprecated:starlette.exceptions.StarletteDeprecationWarning",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 140
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "S", "UP", "ASYNC"]
+ignore = ["S101"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106", "S107", "S108"]
+"scripts/check_helm.py" = ["S603", "S607"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+packages = ["pr_html_preview"]
+
+[tool.coverage.report]
+precision = 2
